@@ -9,6 +9,8 @@ package com.skcraft.launcher.dialog;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
+import com.siamminecraft.skcraft.CrackedSession;
+import com.siamminecraft.skcraft.LauncherConfig;
 import com.skcraft.concurrency.ObservableFuture;
 import com.skcraft.concurrency.ProgressObservable;
 import com.skcraft.launcher.Configuration;
@@ -97,12 +99,14 @@ public class LoginDialog extends JDialog {
         loginButton.setFont(loginButton.getFont().deriveFont(Font.BOLD));
 
         formPanel.addRow(new JLabel(SharedLocale.tr("login.idEmail")), idCombo);
-        formPanel.addRow(new JLabel(SharedLocale.tr("login.password")), passwordText);
+        if(LauncherConfig.checkPassword)
+            formPanel.addRow(new JLabel(SharedLocale.tr("login.password")), passwordText);
         formPanel.addRow(new JLabel(), rememberIdCheck);
-        formPanel.addRow(new JLabel(), rememberPassCheck);
+        if(LauncherConfig.checkPassword)
+            formPanel.addRow(new JLabel(), rememberPassCheck);
         buttonsPanel.setBorder(BorderFactory.createEmptyBorder(26, 13, 13, 13));
 
-        if (launcher.getConfig().isOfflineEnabled()) {
+        if (!LauncherConfig.checkPassword && launcher.getConfig().isOfflineEnabled()) {
             buttonsPanel.addElement(offlineButton);
             buttonsPanel.addElement(Box.createHorizontalStrut(2));
         }
@@ -255,7 +259,7 @@ public class LoginDialog extends JDialog {
             Account account = (Account) selected;
             String password = passwordText.getText();
 
-            if (password == null || password.isEmpty()) {
+            if (LauncherConfig.checkPassword && (password == null || password.isEmpty())) {
                 SwingHelper.showErrorDialog(this, SharedLocale.tr("login.noPasswordError"), SharedLocale.tr("login.noPasswordTitle"));
             } else {
                 if (rememberPassCheck.isSelected()) {
@@ -285,20 +289,23 @@ public class LoginDialog extends JDialog {
         LoginCallable callable = new LoginCallable(account, password);
         ObservableFuture<Session> future = new ObservableFuture<Session>(
                 launcher.getExecutor().submit(callable), callable);
+        if(LauncherConfig.checkPassword) {
+            Futures.addCallback(future, new FutureCallback<Session>() {
+                @Override
+                public void onSuccess(Session result) {
+                    setResult(result);
+                }
 
-        Futures.addCallback(future, new FutureCallback<Session>() {
-            @Override
-            public void onSuccess(Session result) {
-                setResult(result);
-            }
+                @Override
+                public void onFailure(Throwable t) {
+                }
+            }, SwingExecutor.INSTANCE);
 
-            @Override
-            public void onFailure(Throwable t) {
-            }
-        }, SwingExecutor.INSTANCE);
-
-        ProgressDialog.showProgress(this, future, SharedLocale.tr("login.loggingInTitle"), SharedLocale.tr("login.loggingInStatus"));
-        SwingHelper.addErrorDialogCallback(this, future);
+            ProgressDialog.showProgress(this, future, SharedLocale.tr("login.loggingInTitle"), SharedLocale.tr("login.loggingInStatus"));
+            SwingHelper.addErrorDialogCallback(this, future);
+        }else{
+            setResult(new CrackedSession((idCombo.getSelectedItem().toString())));
+        }
     }
 
     private void setResult(Session session) {
